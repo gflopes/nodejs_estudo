@@ -24,10 +24,6 @@ server.use(restify.plugins.acceptParser(server.acceptable));
 server.use(restify.plugins.queryParser());
 server.use(restify.plugins.bodyParser());
 
-server.listen(8080, function () {
-  console.log('%s listening at %s', server.name, server.url);
-});
-
 server.get('/all', function (req, res, next) {
     knex('places')
         .then((dados) =>{
@@ -35,14 +31,31 @@ server.get('/all', function (req, res, next) {
     }, next);
 });
 
-server.get('/geocode', function(req, res, next) {
-    googleMapsClient.geocode({address: '1600 Amphitheatre Parkway, Mountain View, CA'}).asPromise()
+server.post('/geocode', function(req, res, next) {
+    const {lat, lng} = req.body;
+
+    googleMapsClient.reverseGeocode({latlng: [lat, lng]}).asPromise()
         .then((response) => {
             const address = response.json.results[0].formatted_address;
             const place_id = response.json.results[0].place_id;
-            res.send({place_id, address});
+            const image = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=5&size=300x300&sensor=false`;
+            
+            knex('places')
+                .insert({place_id, address, image})
+                .then(() => {
+                    res.send({address, image});
+                }, next);
         })
         .catch((err) => {
             res.send(err);
         });
+});
+
+server.get(/\/(.*)?.*/,restify.plugins.serveStatic({
+    directory: './dist',
+    default: 'index.html',
+}));
+
+server.listen(8080, function () {
+  console.log('%s listening at %s', server.name, server.url);
 });
